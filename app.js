@@ -3,7 +3,6 @@ const cTable = require('console.table');
 
 const db = require('./db/connection');
 const { getDepartments, getEmployees, getRoles } = require('./db/query');
-const InputPrompt = require('inquirer/lib/prompts/input');
 
 function questions() {
     inquirer.prompt({
@@ -17,7 +16,8 @@ function questions() {
             'View All Roles',
             'Add Role',
             'View All Departments',
-            'Add Department'
+            'Add Department',
+            'Exit'
         ]
     }).then(function(answer) {
         switch(answer.search) {
@@ -49,6 +49,11 @@ function questions() {
         case "Add Department":
             addDepartment();
             break;
+        
+        case "Exit":
+            console.log('Good-Bye');
+            db.end();
+            break;
         }
     })
 };
@@ -66,7 +71,7 @@ viewAllDepartments = () => {
 }
 
 viewAllEmployees = () => {
-    const query = db.query('SELECT * FROM employees', (err, res) => {
+    const query = db.query("SELECT e1.id, e1.first_name, e1.last_name, roles.title as role, departments.name AS department, roles.salary, Concat(e2.first_name, ' ', e2.last_name) AS manager FROM employees e1 LEFT JOIN roles ON e1.role_id = roles.id LEFT JOIN departments ON roles.department_id = departments.id LEFT JOIN employees e2 ON e2.id = e1.manager_id", (err, res) => {
         if(err) {
             console.log(err);
         } else {
@@ -78,7 +83,7 @@ viewAllEmployees = () => {
 }
 
 viewAllRoles = () => {
-    const query = db.query('SELECT * FROM roles', (err, res) => {
+    const query = db.query("SELECT roles.id, roles.title, roles.salary, departments.name as department FROM roles JOIN departments ON roles.department_id = departments.id", (err, res) => {
         if(err){
             console.log(err);
         } else {
@@ -237,6 +242,83 @@ function updateEmployeeRole() {
         });
     });
 }
+
+function addDepartment() {
+    inquirer.prompt({
+        type: 'input',
+        name: 'department',
+        message: 'Please enter name of new department: '
+    })
+    .then((input) => {
+        console.log('Creating new department..');
+        const query = db.query('INSERT INTO departments SET ?',
+        {
+            name: input.department
+        },
+        ((err, res) => {
+            if(err) {
+                console.log(err);
+            } else {
+                console.log('Department created...');
+                questions();
+            }
+        }));
+    });
+};
+
+function addRole() {
+    getDepartments()
+    .then((rows) => {
+        let departmentNamesArr = []
+        let departmentArray = rows[0]
+        for (var i = 0; i < departmentArray.length; i++) {
+            let department = departmentArray[i].name;
+            departmentNamesArr.push(department)
+        }
+        inquirer.prompt([
+            {
+                type: 'input',
+                name: 'roleTitle',
+                message: 'Please enter new role title: '
+            },
+            {
+                type: 'nnumber',
+                name: 'salary',
+                message: "Enter the role's salary"
+            },
+            {
+                type: 'list',
+                name: 'department',
+                message: 'Enter the department of the role: ',
+                choices: departmentNamesArr
+            }
+        ])
+        .then((response) => {
+            let departmentId
+            for (let i = 0; i < departmentArray.length; i++) {
+                    if(response.department === departmentArray[i].name) {
+                    departmentId = departmentArray[i].id;
+                    break
+                }
+            }
+            db.query('INSERT INTO roles SET ?',
+                {
+                title: response.roleTitle,
+                salary: response.salary,
+                department_id: departmentId
+                },
+                ((err, res) => {
+                    if(err) {
+                        console.log(err);
+                    } else {
+                        console.log(response.roleTitle + ' added to roles.');
+                        questions();
+                    }
+                })
+            );
+        });
+    });
+};
 
 
 questions();
